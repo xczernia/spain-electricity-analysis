@@ -1,965 +1,730 @@
 # Deployment Guide
 
-This document provides comprehensive deployment instructions for the Spain Electricity Analysis application across various platforms and environments.
+This guide provides comprehensive instructions for deploying the Spain Electricity Analysis project across multiple platforms.
 
 ## Table of Contents
 
-- [Local Development](#local-development)
-- [Docker](#docker)
-- [Heroku](#heroku)
-- [AWS](#aws)
-- [Google Cloud](#google-cloud)
-- [Kubernetes](#kubernetes)
+1. [Local Development Setup](#local-development-setup)
+2. [Docker Deployment](#docker-deployment)
+3. [Heroku Deployment](#heroku-deployment)
+4. [AWS Deployment](#aws-deployment)
+5. [Google Cloud Deployment](#google-cloud-deployment)
+6. [Environment Variables](#environment-variables)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
-## Local Development
+## Local Development Setup
 
 ### Prerequisites
 
 - Python 3.8 or higher
-- pip and virtualenv
+- pip (Python package installer)
 - Git
-- Database (SQLite for development, PostgreSQL for production)
+- Virtual environment tool (venv or conda)
 
-### Setup Instructions
+### Installation Steps
 
-1. **Clone the Repository**
+1. **Clone the repository**
    ```bash
    git clone https://github.com/xczernia/spain-electricity-analysis.git
    cd spain-electricity-analysis
    ```
 
-2. **Create Virtual Environment**
+2. **Create a virtual environment**
    ```bash
+   # Using venv
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   
+   # Or using conda
+   conda create -n spain-electricity python=3.8+
+   conda activate spain-electricity
    ```
 
-3. **Install Dependencies**
+3. **Activate the virtual environment**
+   ```bash
+   # On macOS/Linux
+   source venv/bin/activate
+   
+   # On Windows
+   venv\Scripts\activate
+   ```
+
+4. **Install dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Environment Configuration**
-   Create a `.env` file in the project root:
-   ```
-   FLASK_ENV=development
-   FLASK_APP=app.py
-   DATABASE_URL=sqlite:///app.db
-   DEBUG=True
-   SECRET_KEY=your-secret-key-here
+5. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   nano .env
    ```
 
-5. **Initialize Database**
+6. **Initialize the database** (if applicable)
    ```bash
-   python -c "from app import db; db.create_all()"
+   python manage.py db upgrade
+   # or
+   flask db upgrade
    ```
 
-6. **Run the Application**
+7. **Run the application**
    ```bash
+   python app.py
+   # or
    flask run
    ```
-   The application will be available at `http://localhost:5000`
 
-### Development Notes
+8. **Access the application**
+   Open your browser and navigate to `http://localhost:5000`
 
-- The application uses SQLite by default for local development
-- Hot reloading is enabled when `FLASK_ENV=development`
-- API documentation available at `/api/docs`
-- Database migrations use Alembic (if applicable)
+### Development Commands
+
+```bash
+# Run tests
+pytest
+
+# Run with debug mode
+FLASK_ENV=development flask run
+
+# Run specific tests
+pytest tests/test_electricity.py
+
+# Generate coverage report
+pytest --cov=app tests/
+```
 
 ---
 
-## Docker
+## Docker Deployment
 
 ### Prerequisites
 
-- Docker 20.10 or higher
-- Docker Compose 1.29 or higher
+- Docker (version 20.10+)
+- Docker Compose (version 1.29+)
 
-### Using Docker Compose (Recommended)
+### Quick Start with Docker Compose
 
-1. **Create docker-compose.yml** (if not present)
-   ```yaml
-   version: '3.8'
-
-   services:
-     app:
-       build: .
-       container_name: spain-electricity-analysis
-       ports:
-         - "5000:5000"
-       environment:
-         - FLASK_ENV=production
-         - DATABASE_URL=postgresql://user:password@db:5432/electricity_db
-         - SECRET_KEY=${SECRET_KEY}
-       depends_on:
-         - db
-       volumes:
-         - ./data:/app/data
-       networks:
-         - electricity-network
-
-     db:
-       image: postgres:14-alpine
-       container_name: electricity-db
-       environment:
-         - POSTGRES_USER=user
-         - POSTGRES_PASSWORD=password
-         - POSTGRES_DB=electricity_db
-       volumes:
-         - postgres_data:/var/lib/postgresql/data
-       networks:
-         - electricity-network
-
-   volumes:
-     postgres_data:
-
-   networks:
-     electricity-network:
-       driver: bridge
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/xczernia/spain-electricity-analysis.git
+   cd spain-electricity-analysis
    ```
 
-2. **Build and Run**
+2. **Create environment file**
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **Build and run with Docker Compose**
    ```bash
    docker-compose up -d
    ```
 
-3. **View Logs**
+4. **Access the application**
+   ```
+   http://localhost:5000
+   ```
+
+5. **View logs**
    ```bash
    docker-compose logs -f app
    ```
 
-4. **Stop Services**
+6. **Stop the containers**
    ```bash
    docker-compose down
    ```
 
-### Building Standalone Docker Image
+### Manual Docker Build
 
-1. **Build the Image**
+1. **Build the Docker image**
    ```bash
-   docker build -t spain-electricity-analysis:latest .
+   docker build -t spain-electricity:latest .
    ```
 
-2. **Run Container**
+2. **Run the container**
    ```bash
    docker run -d \
+     --name spain-electricity \
      -p 5000:5000 \
-     -e DATABASE_URL="postgresql://user:password@db:5432/electricity_db" \
-     -e SECRET_KEY="your-secret-key" \
-     --name electricity-app \
-     spain-electricity-analysis:latest
+     --env-file .env \
+     spain-electricity:latest
    ```
 
-3. **Execute Commands in Container**
+3. **View running containers**
    ```bash
-   docker exec -it electricity-app flask db upgrade
+   docker ps
    ```
 
-### Dockerfile Example
+4. **Stop the container**
+   ```bash
+   docker stop spain-electricity
+   docker rm spain-electricity
+   ```
 
-```dockerfile
-FROM python:3.9-slim
+### Docker Compose with Services
 
-WORKDIR /app
+```yaml
+# docker-compose.yml structure
+version: '3.8'
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+    depends_on:
+      - db
+  
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=spain_electricity
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
-COPY . .
-
-ENV FLASK_APP=app.py
-ENV FLASK_ENV=production
-
-EXPOSE 5000
-
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "wsgi:app"]
+volumes:
+  postgres_data:
 ```
 
 ---
 
-## Heroku
+## Heroku Deployment
 
 ### Prerequisites
 
+- Heroku account (free tier available)
 - Heroku CLI installed
-- Heroku account
 - Git repository initialized
 
-### Deployment Steps
+### Step-by-Step Deployment
 
-1. **Login to Heroku**
+1. **Install Heroku CLI**
+   ```bash
+   # macOS
+   brew tap heroku/brew && brew install heroku
+   
+   # Windows
+   # Download from https://devcenter.heroku.com/articles/heroku-cli
+   ```
+
+2. **Login to Heroku**
    ```bash
    heroku login
    ```
 
-2. **Create Heroku App**
+3. **Create a Heroku app**
    ```bash
    heroku create spain-electricity-analysis
    ```
 
-3. **Set Environment Variables**
+4. **Add Procfile** (if not already present)
+   ```bash
+   echo "web: gunicorn app:app" > Procfile
+   ```
+
+5. **Add runtime.txt** (specify Python version)
+   ```bash
+   echo "python-3.9.13" > runtime.txt
+   ```
+
+6. **Set environment variables**
    ```bash
    heroku config:set FLASK_ENV=production
-   heroku config:set SECRET_KEY="your-secure-secret-key"
-   heroku config:set DATABASE_URL="postgresql://..."
+   heroku config:set DATABASE_URL=<your-database-url>
+   heroku config:set SECRET_KEY=<your-secret-key>
+   heroku config:set API_KEY=<your-api-key>
    ```
 
-4. **Add PostgreSQL Add-on**
-   ```bash
-   heroku addons:create heroku-postgresql:standard-0
-   ```
-
-5. **Create Procfile** (in project root)
-   ```
-   web: gunicorn wsgi:app
-   worker: celery -A celery_app worker --loglevel=info
-   ```
-
-6. **Create runtime.txt** (specify Python version)
-   ```
-   python-3.9.16
-   ```
-
-7. **Deploy Application**
+7. **Deploy to Heroku**
    ```bash
    git push heroku main
    ```
 
-8. **Run Database Migrations**
-   ```bash
-   heroku run python -c "from app import db; db.create_all()"
-   ```
-
-9. **View Logs**
+8. **Monitor deployment**
    ```bash
    heroku logs --tail
    ```
 
-### Monitoring
+9. **Access your app**
+   ```bash
+   heroku open
+   ```
 
-- Dashboard: `heroku open`
-- Metrics: `heroku metrics`
-- Dyno scaling: `heroku ps:scale web=2`
+### Heroku Add-ons
 
-### Scaling Configuration
+Optional add-ons for enhanced functionality:
 
 ```bash
-# Scale web dynos
-heroku ps:scale web=3
+# PostgreSQL database
+heroku addons:create heroku-postgresql:hobby-dev
 
-# Scale worker dynos
-heroku ps:scale worker=2
+# Redis for caching
+heroku addons:create heroku-redis:premium-0
 
-# Check current processes
-heroku ps
+# Scheduler for background jobs
+heroku addons:create scheduler:standard
+```
+
+### Updating Your App
+
+```bash
+# Push changes
+git push heroku main
+
+# Run migrations
+heroku run python manage.py db upgrade
+
+# Restart app
+heroku restart
 ```
 
 ---
 
-## AWS
+## AWS Deployment
 
 ### Prerequisites
 
-- AWS Account with appropriate permissions
-- AWS CLI v2 installed
-- IAM user with EC2, RDS, and ECR access
+- AWS account with active credentials
+- AWS CLI configured
+- EC2 key pair created
+- Security groups configured
 
-### Deployment Options
+### Option 1: EC2 with Elastic Beanstalk
 
-### Option 1: EC2 + RDS
-
-1. **Launch EC2 Instance**
-   - Choose Ubuntu 20.04 LTS AMI
-   - Instance type: t3.medium or larger
-   - Configure security group to allow ports 80, 443, 22
-
-2. **SSH into Instance**
+1. **Install Elastic Beanstalk CLI**
    ```bash
-   ssh -i your-key.pem ubuntu@your-ec2-instance-ip
+   pip install awsebcli
    ```
 
-3. **Install Dependencies**
+2. **Initialize Elastic Beanstalk**
    ```bash
-   sudo apt update && sudo apt upgrade -y
-   sudo apt install -y python3.9 python3-pip python3-venv nginx supervisor
+   eb init -p python-3.9 spain-electricity-analysis
    ```
 
-4. **Clone Repository**
+3. **Create environment**
    ```bash
-   cd /home/ubuntu
+   eb create production-env
+   ```
+
+4. **Set environment variables**
+   ```bash
+   eb setenv FLASK_ENV=production DATABASE_URL=<url> SECRET_KEY=<key>
+   ```
+
+5. **Deploy**
+   ```bash
+   eb deploy
+   ```
+
+6. **Monitor**
+   ```bash
+   eb open
+   eb logs
+   eb status
+   ```
+
+### Option 2: EC2 Manual Setup
+
+1. **Launch EC2 instance**
+   - AMI: Ubuntu 20.04 LTS
+   - Instance type: t3.micro (free tier)
+   - Security group: Allow HTTP (80), HTTPS (443), SSH (22)
+
+2. **Connect to instance**
+   ```bash
+   ssh -i your-key.pem ubuntu@your-ec2-ip
+   ```
+
+3. **Update and install dependencies**
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y python3 python3-pip python3-venv nginx git
+   ```
+
+4. **Clone repository**
+   ```bash
    git clone https://github.com/xczernia/spain-electricity-analysis.git
    cd spain-electricity-analysis
    ```
 
-5. **Setup Application**
+5. **Setup virtual environment**
    ```bash
    python3 -m venv venv
    source venv/bin/activate
    pip install -r requirements.txt
+   pip install gunicorn
    ```
 
-6. **Configure Environment**
+6. **Configure Nginx**
    ```bash
-   cat > .env << EOF
-   FLASK_ENV=production
-   DATABASE_URL=postgresql://user:password@rds-endpoint:5432/electricity_db
-   SECRET_KEY=your-secret-key
-   EOF
+   sudo nano /etc/nginx/sites-available/spain-electricity
    ```
 
-7. **Setup Supervisor**
-   Create `/etc/supervisor/conf.d/electricity.conf`:
-   ```ini
-   [program:electricity]
-   directory=/home/ubuntu/spain-electricity-analysis
-   command=/home/ubuntu/spain-electricity-analysis/venv/bin/gunicorn -w 4 -b 127.0.0.1:8000 wsgi:app
-   autostart=true
-   autorestart=true
-   user=ubuntu
-   ```
-
-8. **Configure Nginx**
-   Create `/etc/nginx/sites-available/electricity`:
+   Sample Nginx configuration:
    ```nginx
    server {
        listen 80;
        server_name your-domain.com;
 
        location / {
-           proxy_pass http://127.0.0.1:8000;
+           proxy_pass http://127.0.0.1:5000;
            proxy_set_header Host $host;
            proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
        }
    }
    ```
 
-9. **Enable and Start Services**
+7. **Enable Nginx site**
    ```bash
-   sudo systemctl restart supervisor
+   sudo ln -s /etc/nginx/sites-available/spain-electricity /etc/nginx/sites-enabled/
+   sudo nginx -t
    sudo systemctl restart nginx
    ```
 
-### Option 2: AWS ECS (Recommended for scalability)
-
-1. **Create ECR Repository**
+8. **Create systemd service**
    ```bash
-   aws ecr create-repository --repository-name spain-electricity-analysis --region us-east-1
+   sudo nano /etc/systemd/system/spain-electricity.service
    ```
 
-2. **Build and Push Docker Image**
+   Content:
+   ```ini
+   [Unit]
+   Description=Spain Electricity Analysis
+   After=network.target
+
+   [Service]
+   User=ubuntu
+   WorkingDirectory=/home/ubuntu/spain-electricity-analysis
+   Environment="PATH=/home/ubuntu/spain-electricity-analysis/venv/bin"
+   ExecStart=/home/ubuntu/spain-electricity-analysis/venv/bin/gunicorn --workers 4 --bind 127.0.0.1:5000 app:app
+   Restart=always
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+9. **Start service**
    ```bash
-   aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
+   sudo systemctl daemon-reload
+   sudo systemctl start spain-electricity
+   sudo systemctl enable spain-electricity
+   ```
+
+### Option 3: ECS (Docker Containers)
+
+1. **Create ECR repository**
+   ```bash
+   aws ecr create-repository --repository-name spain-electricity
+   ```
+
+2. **Build and push Docker image**
+   ```bash
+   aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
    
-   docker build -t spain-electricity-analysis:latest .
-   
-   docker tag spain-electricity-analysis:latest YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/spain-electricity-analysis:latest
-   
-   docker push YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/spain-electricity-analysis:latest
+   docker build -t spain-electricity:latest .
+   docker tag spain-electricity:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/spain-electricity:latest
+   docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/spain-electricity:latest
    ```
 
-3. **Create ECS Task Definition** (task-definition.json)
-   ```json
-   {
-     "family": "spain-electricity",
-     "networkMode": "awsvpc",
-     "requiresCompatibilities": ["FARGATE"],
-     "cpu": "256",
-     "memory": "512",
-     "containerDefinitions": [
-       {
-         "name": "app",
-         "image": "YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/spain-electricity-analysis:latest",
-         "portMappings": [
-           {
-             "containerPort": 5000,
-             "protocol": "tcp"
-           }
-         ],
-         "environment": [
-           {
-             "name": "FLASK_ENV",
-             "value": "production"
-           }
-         ],
-         "secrets": [
-           {
-             "name": "DATABASE_URL",
-             "valueFrom": "arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT_ID:secret:electricity/db-url"
-           }
-         ]
-       }
-     ]
-   }
-   ```
-
-4. **Register Task Definition**
-   ```bash
-   aws ecs register-task-definition --cli-input-json file://task-definition.json
-   ```
-
-5. **Create ECS Service** (via AWS Console or CLI)
-   - Cluster: Create new or use existing
-   - Launch type: Fargate
-   - Task definition: spain-electricity:latest
-   - Desired count: 2
-
-6. **Setup RDS Database**
-   ```bash
-   aws rds create-db-instance \
-     --db-instance-identifier electricity-db \
-     --db-instance-class db.t3.micro \
-     --engine postgres \
-     --master-username admin \
-     --master-user-password YOUR_PASSWORD \
-     --allocated-storage 20
-   ```
-
-### Option 3: AWS Elastic Beanstalk
-
-1. **Initialize Elastic Beanstalk**
-   ```bash
-   eb init -p python-3.9 spain-electricity-analysis
-   ```
-
-2. **Create Environment**
-   ```bash
-   eb create production-env
-   ```
-
-3. **Configure Environment Variables**
-   ```bash
-   eb setenv FLASK_ENV=production SECRET_KEY=your-key DATABASE_URL=postgresql://...
-   ```
-
-4. **Deploy Application**
-   ```bash
-   eb deploy
-   ```
-
-5. **Monitor Deployment**
-   ```bash
-   eb logs
-   ```
+3. **Create ECS cluster and service** (via AWS Console or CloudFormation)
 
 ---
 
-## Google Cloud
+## Google Cloud Deployment
 
 ### Prerequisites
 
-- Google Cloud Project created
-- gcloud CLI installed and configured
-- Appropriate IAM permissions
+- Google Cloud account with active billing
+- Google Cloud SDK installed
+- `gcloud` CLI configured
 
-### Deployment Option 1: Cloud Run (Serverless)
+### Option 1: Google App Engine
 
-1. **Authenticate with GCP**
+1. **Install Google Cloud SDK**
    ```bash
-   gcloud auth login
-   gcloud config set project YOUR_PROJECT_ID
+   # macOS
+   brew install google-cloud-sdk
+   
+   # Ubuntu/Debian
+   curl https://sdk.cloud.google.com | bash
+   
+   # Windows
+   # Download from https://cloud.google.com/sdk/docs/install
    ```
 
-2. **Build and Push Container Image**
+2. **Initialize gcloud**
    ```bash
-   gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/spain-electricity-analysis:latest
+   gcloud init
+   gcloud auth application-default login
    ```
 
-3. **Deploy to Cloud Run**
+3. **Create app.yaml**
+   ```yaml
+   runtime: python39
+   
+   env: standard
+   
+   entrypoint: gunicorn -b :$PORT app:app
+   
+   env_variables:
+     FLASK_ENV: "production"
+   
+   handlers:
+   - url: /.*
+     script: auto
+   ```
+
+4. **Deploy to App Engine**
    ```bash
-   gcloud run deploy spain-electricity-analysis \
-     --image gcr.io/YOUR_PROJECT_ID/spain-electricity-analysis:latest \
+   gcloud app deploy
+   ```
+
+5. **View logs**
+   ```bash
+   gcloud app logs read -n 50
+   ```
+
+6. **Access your app**
+   ```bash
+   gcloud app browse
+   ```
+
+### Option 2: Google Cloud Run
+
+1. **Build Docker image**
+   ```bash
+   gcloud builds submit --tag gcr.io/<project-id>/spain-electricity
+   ```
+
+2. **Deploy to Cloud Run**
+   ```bash
+   gcloud run deploy spain-electricity \
+     --image gcr.io/<project-id>/spain-electricity \
      --platform managed \
      --region us-central1 \
      --allow-unauthenticated \
-     --set-env-vars FLASK_ENV=production,SECRET_KEY=your-key
+     --set-env-vars FLASK_ENV=production
    ```
 
-4. **Setup Cloud SQL**
+3. **Set environment variables**
    ```bash
-   gcloud sql instances create electricity-db \
-     --database-version POSTGRES_14 \
-     --tier db-f1-micro \
-     --region us-central1
+   gcloud run services update spain-electricity \
+     --update-env-vars DATABASE_URL=<url>,SECRET_KEY=<key>
    ```
 
-5. **Create Database**
+### Option 3: Google Kubernetes Engine (GKE)
+
+1. **Create GKE cluster**
    ```bash
-   gcloud sql databases create electricity_db \
-     --instance electricity-db
+   gcloud container clusters create spain-electricity-cluster \
+     --zone us-central1-a \
+     --num-nodes 2
    ```
 
-6. **Set Cloud SQL Proxy Connection**
-   Update the Cloud Run deployment to include Cloud SQL proxy:
+2. **Build and push image to Artifact Registry**
    ```bash
-   gcloud run deploy spain-electricity-analysis \
-     --image gcr.io/YOUR_PROJECT_ID/spain-electricity-analysis:latest \
-     --add-cloudsql-instances YOUR_PROJECT_ID:us-central1:electricity-db \
-     --set-env-vars DATABASE_URL="postgresql://user:password@/electricity_db?host=/cloudsql/YOUR_PROJECT_ID:us-central1:electricity-db"
+   gcloud builds submit --tag us-central1-docker.pkg.dev/<project>/spain-electricity/app
    ```
 
-### Deployment Option 2: Compute Engine
-
-1. **Create VM Instance**
-   ```bash
-   gcloud compute instances create electricity-server \
-     --image-family ubuntu-2004-lts \
-     --image-project ubuntu-os-cloud \
-     --machine-type n1-standard-1 \
-     --zone us-central1-a
-   ```
-
-2. **SSH into Instance**
-   ```bash
-   gcloud compute ssh electricity-server --zone us-central1-a
-   ```
-
-3. **Install Dependencies** (same as AWS EC2 steps)
-
-4. **Deploy Application** (same as AWS EC2 steps)
-
-### Deployment Option 3: GKE (Kubernetes)
-
-See [Kubernetes](#kubernetes) section below for GKE-specific deployment.
-
-### Setup Cloud Monitoring
-
-```bash
-gcloud monitoring dashboards create --config-from-file=monitoring-dashboard.json
-```
-
-### View Logs
-
-```bash
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=spain-electricity-analysis" --limit 50 --format json
-```
-
----
-
-## Kubernetes
-
-### Prerequisites
-
-- kubectl installed
-- Kubernetes cluster (local, cloud, or managed service)
-- Docker image built and pushed to registry
-- Helm (optional but recommended)
-
-### Deployment Option 1: Manual Kubernetes Manifests
-
-1. **Create Namespace**
-   ```bash
-   kubectl create namespace electricity
-   ```
-
-2. **Create ConfigMap** (configmap.yaml)
-   ```yaml
-   apiVersion: v1
-   kind: ConfigMap
-   metadata:
-     name: electricity-config
-     namespace: electricity
-   data:
-     FLASK_ENV: production
-   ```
-
-3. **Create Secret** (secret.yaml)
-   ```yaml
-   apiVersion: v1
-   kind: Secret
-   metadata:
-     name: electricity-secret
-     namespace: electricity
-   type: Opaque
-   stringData:
-     DATABASE_URL: postgresql://user:password@db-host:5432/electricity_db
-     SECRET_KEY: your-secret-key-here
-   ```
-
-4. **Create PostgreSQL StatefulSet** (postgres-statefulset.yaml)
-   ```yaml
-   apiVersion: v1
-   kind: PersistentVolumeClaim
-   metadata:
-     name: postgres-pvc
-     namespace: electricity
-   spec:
-     accessModes:
-       - ReadWriteOnce
-     resources:
-       requests:
-         storage: 10Gi
-   ---
-   apiVersion: apps/v1
-   kind: StatefulSet
-   metadata:
-     name: postgres
-     namespace: electricity
-   spec:
-     serviceName: postgres
-     replicas: 1
-     selector:
-       matchLabels:
-         app: postgres
-     template:
-       metadata:
-         labels:
-           app: postgres
-       spec:
-         containers:
-         - name: postgres
-           image: postgres:14-alpine
-           ports:
-           - containerPort: 5432
-           env:
-           - name: POSTGRES_USER
-             value: user
-           - name: POSTGRES_PASSWORD
-             valueFrom:
-               secretKeyRef:
-                 name: electricity-secret
-                 key: DATABASE_PASSWORD
-           - name: POSTGRES_DB
-             value: electricity_db
-           volumeMounts:
-           - name: postgres-storage
-             mountPath: /var/lib/postgresql/data
-         volumes:
-         - name: postgres-storage
-           persistentVolumeClaim:
-             claimName: postgres-pvc
-   ---
-   apiVersion: v1
-   kind: Service
-   metadata:
-     name: postgres
-     namespace: electricity
-   spec:
-     clusterIP: None
-     ports:
-     - port: 5432
-       targetPort: 5432
-     selector:
-       app: postgres
-   ```
-
-5. **Create Application Deployment** (deployment.yaml)
+3. **Create Kubernetes deployment manifest** (deployment.yaml)
    ```yaml
    apiVersion: apps/v1
    kind: Deployment
    metadata:
-     name: electricity-app
-     namespace: electricity
+     name: spain-electricity
    spec:
-     replicas: 3
+     replicas: 2
      selector:
        matchLabels:
-         app: electricity-app
+         app: spain-electricity
      template:
        metadata:
          labels:
-           app: electricity-app
+           app: spain-electricity
        spec:
          containers:
          - name: app
-           image: YOUR_REGISTRY/spain-electricity-analysis:latest
-           imagePullPolicy: IfNotPresent
+           image: us-central1-docker.pkg.dev/<project>/spain-electricity/app
            ports:
            - containerPort: 5000
-           envFrom:
-           - configMapRef:
-               name: electricity-config
-           - secretRef:
-               name: electricity-secret
-           resources:
-             requests:
-               memory: "256Mi"
-               cpu: "250m"
-             limits:
-               memory: "512Mi"
-               cpu: "500m"
-           livenessProbe:
-             httpGet:
-               path: /health
-               port: 5000
-             initialDelaySeconds: 30
-             periodSeconds: 10
-           readinessProbe:
-             httpGet:
-               path: /health
-               port: 5000
-             initialDelaySeconds: 5
-             periodSeconds: 5
+           env:
+           - name: FLASK_ENV
+             value: "production"
    ```
 
-6. **Create Service** (service.yaml)
-   ```yaml
-   apiVersion: v1
-   kind: Service
-   metadata:
-     name: electricity-service
-     namespace: electricity
-   spec:
-     type: LoadBalancer
-     ports:
-     - port: 80
-       targetPort: 5000
-       protocol: TCP
-     selector:
-       app: electricity-app
-   ```
-
-7. **Create Ingress** (ingress.yaml)
-   ```yaml
-   apiVersion: networking.k8s.io/v1
-   kind: Ingress
-   metadata:
-     name: electricity-ingress
-     namespace: electricity
-     annotations:
-       cert-manager.io/cluster-issuer: letsencrypt-prod
-   spec:
-     ingressClassName: nginx
-     tls:
-     - hosts:
-       - electricity.yourdomain.com
-       secretName: electricity-tls
-     rules:
-     - host: electricity.yourdomain.com
-       http:
-         paths:
-         - path: /
-           pathType: Prefix
-           backend:
-             service:
-               name: electricity-service
-               port:
-                 number: 80
-   ```
-
-8. **Deploy to Cluster**
+4. **Get cluster credentials**
    ```bash
-   kubectl apply -f configmap.yaml
-   kubectl apply -f secret.yaml
-   kubectl apply -f postgres-statefulset.yaml
+   gcloud container clusters get-credentials spain-electricity-cluster --zone us-central1-a
+   ```
+
+5. **Deploy to GKE**
+   ```bash
    kubectl apply -f deployment.yaml
-   kubectl apply -f service.yaml
-   kubectl apply -f ingress.yaml
    ```
 
-9. **Verify Deployment**
+6. **Expose service**
    ```bash
-   kubectl get deployments -n electricity
-   kubectl get pods -n electricity
-   kubectl get svc -n electricity
-   ```
-
-### Deployment Option 2: Using Helm (Recommended)
-
-1. **Create Helm Chart Structure**
-   ```
-   electricity-chart/
-   ├── Chart.yaml
-   ├── values.yaml
-   ├── templates/
-   │   ├── deployment.yaml
-   │   ├── service.yaml
-   │   ├── ingress.yaml
-   │   ├── configmap.yaml
-   │   └── secret.yaml
-   ```
-
-2. **Chart.yaml**
-   ```yaml
-   apiVersion: v2
-   name: spain-electricity-analysis
-   description: A Helm chart for Spain Electricity Analysis
-   type: application
-   version: 1.0.0
-   appVersion: "1.0"
-   ```
-
-3. **values.yaml**
-   ```yaml
-   replicaCount: 3
-
-   image:
-     repository: YOUR_REGISTRY/spain-electricity-analysis
-     tag: latest
-     pullPolicy: IfNotPresent
-
-   service:
-     type: LoadBalancer
-     port: 80
-     targetPort: 5000
-
-   ingress:
-     enabled: true
-     hostname: electricity.yourdomain.com
-     tls:
-       enabled: true
-       issuer: letsencrypt-prod
-
-   resources:
-     requests:
-       memory: "256Mi"
-       cpu: "250m"
-     limits:
-       memory: "512Mi"
-       cpu: "500m"
-
-   postgresql:
-     enabled: true
-     auth:
-       username: user
-       password: changeme
-       database: electricity_db
-
-   env:
-     FLASK_ENV: production
-   ```
-
-4. **Install Helm Chart**
-   ```bash
-   helm repo add myrepo YOUR_HELM_REPO_URL
-   helm install electricity myrepo/spain-electricity-analysis \
-     --namespace electricity \
-     --create-namespace \
-     --values values.yaml
-   ```
-
-5. **Upgrade Helm Chart**
-   ```bash
-   helm upgrade electricity myrepo/spain-electricity-analysis \
-     --namespace electricity \
-     --values values.yaml
-   ```
-
-### Kubernetes Management Commands
-
-```bash
-# View pod logs
-kubectl logs -n electricity deployment/electricity-app
-
-# Port forward for local testing
-kubectl port-forward -n electricity svc/electricity-service 8080:80
-
-# Scale deployment
-kubectl scale deployment electricity-app -n electricity --replicas=5
-
-# Rolling update
-kubectl set image deployment/electricity-app \
-  app=YOUR_REGISTRY/spain-electricity-analysis:v2 \
-  -n electricity
-
-# Check resource usage
-kubectl top nodes
-kubectl top pods -n electricity
-
-# Delete deployment
-kubectl delete namespace electricity
-```
-
-### GKE-Specific Setup
-
-1. **Create GKE Cluster**
-   ```bash
-   gcloud container clusters create electricity-cluster \
-     --zone us-central1-a \
-     --num-nodes 3 \
-     --enable-autoscaling \
-     --min-nodes 2 \
-     --max-nodes 10
-   ```
-
-2. **Get Cluster Credentials**
-   ```bash
-   gcloud container clusters get-credentials electricity-cluster \
-     --zone us-central1-a
-   ```
-
-3. **Configure kubectl**
-   ```bash
-   gcloud container clusters get-credentials electricity-cluster
+   kubectl expose deployment spain-electricity --type=LoadBalancer --port=80 --target-port=5000
    ```
 
 ---
 
-## Best Practices
+## Environment Variables
 
-### Security
-- Use environment variables for sensitive data
-- Implement HTTPS/TLS for all deployments
-- Use private container registries
-- Implement proper RBAC policies in Kubernetes
-- Regularly update dependencies
+Create a `.env` file in the project root with the following variables:
 
-### Monitoring & Logging
-- Setup centralized logging (ELK, Stackdriver, CloudWatch)
-- Monitor CPU, memory, and disk usage
-- Setup alerts for critical metrics
-- Track application performance metrics
+```env
+# Flask Configuration
+FLASK_APP=app.py
+FLASK_ENV=production
+SECRET_KEY=your-secret-key-here
 
-### Scaling & Load Balancing
-- Use load balancers for distributing traffic
-- Implement horizontal pod autoscaling in Kubernetes
-- Cache frequently accessed data
-- Use CDN for static assets
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/spain_electricity
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=spain_electricity
+DB_USER=admin
+DB_PASSWORD=your-password
 
-### Database Management
-- Regular automated backups
-- Use connection pooling
-- Implement read replicas for scaling reads
-- Monitor query performance
+# API Configuration
+API_KEY=your-api-key
+API_SECRET=your-api-secret
+API_TIMEOUT=30
 
-### CI/CD Integration
-- Automate testing before deployment
-- Use blue-green deployments
-- Implement canary releases
-- Maintain version control for all configurations
+# Logging
+LOG_LEVEL=INFO
+LOG_FILE=logs/app.log
+
+# External Services
+SENDGRID_API_KEY=your-sendgrid-key
+SLACK_WEBHOOK_URL=your-slack-webhook
+
+# Feature Flags
+ENABLE_CACHING=true
+CACHE_TIMEOUT=3600
+ENABLE_NOTIFICATIONS=false
+
+# Security
+CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
+SESSION_TIMEOUT=1800
+```
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
+### Common Issues and Solutions
 
-**Application won't start**
-- Check environment variables are set correctly
-- Verify database connectivity
-- Review application logs
-- Ensure all dependencies are installed
+#### 1. Port Already in Use
+```bash
+# Find process using port 5000
+lsof -i :5000
 
-**Database connection errors**
-- Verify DATABASE_URL format
-- Check database server is running and accessible
-- Verify database credentials
-- Ensure network security groups/firewall rules allow traffic
+# Kill the process
+kill -9 <PID>
+```
 
-**Performance issues**
-- Check resource allocation
-- Monitor database query performance
-- Implement caching strategies
-- Scale horizontally if needed
+#### 2. Database Connection Issues
+```bash
+# Verify database credentials
+psql -h localhost -U admin -d spain_electricity
 
-**Port/binding issues**
-- Ensure port isn't already in use
-- Check firewall rules
-- Verify port mapping in container/k8s config
-- Check security group rules (AWS) or network policies (GCP)
+# Check connection string
+echo $DATABASE_URL
+```
+
+#### 3. Module Not Found Errors
+```bash
+# Reinstall dependencies
+pip install --force-reinstall -r requirements.txt
+
+# Verify Python version
+python --version
+```
+
+#### 4. Docker Build Failures
+```bash
+# Clean up Docker system
+docker system prune -a
+
+# Rebuild with no cache
+docker build --no-cache -t spain-electricity:latest .
+```
+
+#### 5. Heroku Deployment Issues
+```bash
+# Check Heroku logs
+heroku logs --tail
+
+# Restart dyno
+heroku restart
+
+# Check Procfile
+cat Procfile
+```
+
+#### 6. AWS Elastic Beanstalk Issues
+```bash
+# SSH into instance
+eb ssh
+
+# View EB logs
+eb logs
+
+# Check application logs
+cat /var/log/eb-activity.log
+```
+
+#### 7. Google Cloud Issues
+```bash
+# Check Cloud Run logs
+gcloud run logs read spain-electricity
+
+# Debug locally with Cloud Run emulator
+functions-framework --target=app --debug
+```
+
+### Performance Optimization
+
+- **Caching**: Enable Redis for better performance
+- **Database indexing**: Ensure proper indexes on frequently queried columns
+- **Load balancing**: Use load balancers (AWS ELB, Google Cloud Load Balancing)
+- **CDN**: Consider CloudFront (AWS) or Cloud CDN (Google Cloud)
+- **Monitoring**: Set up CloudWatch (AWS) or Cloud Monitoring (Google Cloud)
+
+### Security Considerations
+
+- Always use HTTPS in production
+- Rotate API keys and secrets regularly
+- Use environment variables for sensitive data
+- Enable database encryption
+- Set up firewall rules and security groups
+- Regular security audits and dependency updates
+- Enable logging and monitoring
+- Use VPN for sensitive operations
 
 ---
 
-## Support & Documentation
+## Support and Resources
 
-For additional help:
-- GitHub Issues: [github.com/xczernia/spain-electricity-analysis/issues](https://github.com/xczernia/spain-electricity-analysis/issues)
-- Documentation: Check README.md
-- Contributing: See CONTRIBUTING.md
+- **Documentation**: See README.md for project overview
+- **Issues**: Report bugs on GitHub Issues
+- **Contributing**: See CONTRIBUTING.md for guidelines
+- **License**: See LICENSE file
+
+For deployment questions, please open an issue on GitHub or contact the maintainers.
 
 ---
 
-**Last Updated**: January 5, 2026
-**Maintainer**: xczernia
+**Last Updated**: 2026-01-05
+**Maintained by**: xczernia
