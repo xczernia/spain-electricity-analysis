@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
+import plotly.express as px
 from datetime import datetime, timedelta
 import numpy as np
 
-# Set page configuration
+# Page configuration
 st.set_page_config(
     page_title="Spain Electricity Market Analysis",
     page_icon="⚡",
@@ -16,262 +16,215 @@ st.set_page_config(
 # Title and description
 st.title("⚡ Spain Electricity Market Analysis")
 st.markdown("""
-    This dashboard provides insights into Spain's electricity market, including:
-    - Real-time electricity prices
-    - Supply and demand analysis
-    - Renewable energy penetration
-    - Historical trends
+    This dashboard provides comprehensive analysis of the Spanish electricity market,
+    including price trends, demand patterns, and generation sources.
 """)
 
-# Sidebar configuration
-st.sidebar.header("Dashboard Configuration")
-analysis_type = st.sidebar.selectbox(
-    "Select Analysis Type",
-    ["Overview", "Price Analysis", "Supply & Demand", "Renewable Energy", "Historical Trends"]
+# Sidebar for navigation and filters
+st.sidebar.header("Navigation & Filters")
+page = st.sidebar.radio(
+    "Select a page",
+    ["Overview", "Price Analysis", "Demand Patterns", "Generation Mix", "About"]
 )
 
+# Date range selector
 date_range = st.sidebar.date_input(
-    "Select Date Range",
+    "Select date range",
     value=(datetime.now() - timedelta(days=30), datetime.now()),
     max_value=datetime.now()
 )
 
-# Main content area
-if analysis_type == "Overview":
+# Sample data generator (replace with real data source)
+@st.cache_data
+def load_sample_data(days=30):
+    """Generate sample electricity market data"""
+    dates = pd.date_range(end=datetime.now(), periods=days, freq='D')
+    data = {
+        'date': dates,
+        'price': np.random.uniform(50, 150, days) + np.sin(np.arange(days) * 2 * np.pi / 7) * 20,
+        'demand': np.random.uniform(20000, 35000, days),
+        'wind': np.random.uniform(5000, 15000, days),
+        'solar': np.random.uniform(2000, 10000, days),
+        'hydro': np.random.uniform(3000, 8000, days),
+        'nuclear': np.random.uniform(7000, 9000, days),
+        'gas': np.random.uniform(5000, 12000, days),
+    }
+    return pd.DataFrame(data)
+
+# Load data
+df = load_sample_data(30)
+
+# PAGE: Overview
+if page == "Overview":
     st.header("Market Overview")
     
+    # Key metrics
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric(
-            label="Current Price",
-            value="€85.50/MWh",
-            delta="+2.5%",
-            delta_color="inverse"
-        )
+        avg_price = df['price'].mean()
+        st.metric("Avg Price (€/MWh)", f"{avg_price:.2f}")
     
     with col2:
-        st.metric(
-            label="Total Demand",
-            value="28,500 MW",
-            delta="-1.2%"
-        )
+        avg_demand = df['demand'].mean()
+        st.metric("Avg Demand (MWh)", f"{avg_demand:,.0f}")
     
     with col3:
-        st.metric(
-            label="Renewable Generation",
-            value="45.2%",
-            delta="+3.1%"
-        )
+        renewable_pct = ((df['wind'].mean() + df['solar'].mean() + df['hydro'].mean()) / df['demand'].mean()) * 100
+        st.metric("Renewable %", f"{renewable_pct:.1f}%")
     
     with col4:
-        st.metric(
-            label="Wind Power",
-            value="8,920 MW",
-            delta="+5.8%",
-            delta_color="inverse"
-        )
+        latest_price = df['price'].iloc[-1]
+        price_change = ((latest_price - df['price'].iloc[-7]) / df['price'].iloc[-7]) * 100
+        st.metric("Latest Price (€/MWh)", f"{latest_price:.2f}", delta=f"{price_change:.1f}%")
     
-    st.markdown("---")
+    st.divider()
     
-    # Sample data for visualization
-    hours = pd.date_range(start=datetime.now() - timedelta(hours=24), periods=24, freq='h')
-    sample_data = pd.DataFrame({
-        'Time': hours,
-        'Price': np.random.uniform(70, 120, 24),
-        'Demand': np.random.uniform(25000, 30000, 24),
-        'Wind': np.random.uniform(6000, 10000, 24),
-        'Solar': np.random.uniform(2000, 8000, 24)
-    })
-    
-    # Price chart
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Hourly Electricity Price (24h)")
-        fig_price = px.line(
-            sample_data,
-            x='Time',
-            y='Price',
-            title='Electricity Price Trend',
-            labels={'Price': 'Price (€/MWh)', 'Time': 'Time'}
-        )
-        fig_price.update_traces(line=dict(color='#FF6B6B', width=2))
-        st.plotly_chart(fig_price, use_container_width=True)
-    
-    with col2:
-        st.subheader("Demand & Generation (24h)")
-        fig_demand = px.line(
-            sample_data,
-            x='Time',
-            y=['Demand', 'Wind', 'Solar'],
-            title='Demand vs Renewable Generation',
-            labels={'value': 'Power (MW)', 'Time': 'Time', 'variable': 'Source'}
-        )
-        st.plotly_chart(fig_demand, use_container_width=True)
+    # Price trend chart
+    st.subheader("Price Trend (Last 30 Days)")
+    fig_price = go.Figure()
+    fig_price.add_trace(go.Scatter(
+        x=df['date'],
+        y=df['price'],
+        mode='lines+markers',
+        name='Price',
+        line=dict(color='#FF6692', width=2)
+    ))
+    fig_price.update_layout(
+        title="Electricity Price Trend",
+        xaxis_title="Date",
+        yaxis_title="Price (€/MWh)",
+        hovermode='x unified',
+        height=400
+    )
+    st.plotly_chart(fig_price, use_container_width=True)
 
-elif analysis_type == "Price Analysis":
+# PAGE: Price Analysis
+elif page == "Price Analysis":
     st.header("Price Analysis")
     
-    st.subheader("Price Statistics")
-    price_data = np.random.uniform(65, 130, 100)
-    
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2 = st.columns(2)
     
     with col1:
-        st.metric("Average Price", f"€{price_data.mean():.2f}/MWh")
+        st.subheader("Price Distribution")
+        fig_dist = px.histogram(df, x='price', nbins=20, title="Price Distribution")
+        fig_dist.update_layout(height=400)
+        st.plotly_chart(fig_dist, use_container_width=True)
+    
     with col2:
-        st.metric("Max Price", f"€{price_data.max():.2f}/MWh")
-    with col3:
-        st.metric("Min Price", f"€{price_data.min():.2f}/MWh")
-    with col4:
-        st.metric("Std Deviation", f"€{price_data.std():.2f}")
+        st.subheader("Price Statistics")
+        stats = df['price'].describe()
+        st.dataframe(stats, use_container_width=True)
     
-    st.markdown("---")
-    
-    # Price distribution
-    fig_dist = px.histogram(
-        x=price_data,
-        nbins=20,
-        title='Price Distribution',
-        labels={'x': 'Price (€/MWh)', 'count': 'Frequency'}
-    )
-    st.plotly_chart(fig_dist, use_container_width=True)
+    st.divider()
+    st.subheader("Detailed Price Data")
+    st.dataframe(df[['date', 'price', 'demand']], use_container_width=True)
 
-elif analysis_type == "Supply & Demand":
-    st.header("Supply & Demand Analysis")
+# PAGE: Demand Patterns
+elif page == "Demand Patterns":
+    st.header("Demand Patterns")
     
-    # Create sample data
-    hours = pd.date_range(start=datetime.now() - timedelta(days=7), periods=168, freq='h')
-    supply_demand_data = pd.DataFrame({
-        'Time': hours,
-        'Demand': np.random.uniform(22000, 32000, 168),
-        'Nuclear': np.random.uniform(8000, 10000, 168),
-        'Hydro': np.random.uniform(3000, 6000, 168),
-        'Wind': np.random.uniform(5000, 12000, 168),
-        'Solar': np.random.uniform(1000, 8000, 168),
-        'Gas': np.random.uniform(2000, 8000, 168),
-        'Coal': np.random.uniform(1000, 4000, 168)
-    })
-    
-    fig_supply = px.area(
-        supply_demand_data,
-        x='Time',
-        y=['Nuclear', 'Hydro', 'Wind', 'Solar', 'Gas', 'Coal'],
-        title='Energy Supply Mix (7 days)',
-        labels={'value': 'Power (MW)', 'Time': 'Time', 'variable': 'Source'}
+    fig_demand = go.Figure()
+    fig_demand.add_trace(go.Scatter(
+        x=df['date'],
+        y=df['demand'],
+        mode='lines+markers',
+        name='Demand',
+        line=dict(color='#1f77b4', width=2),
+        fill='tozeroy'
+    ))
+    fig_demand.update_layout(
+        title="Electricity Demand Trend",
+        xaxis_title="Date",
+        yaxis_title="Demand (MWh)",
+        hovermode='x unified',
+        height=450
     )
-    st.plotly_chart(fig_supply, use_container_width=True)
+    st.plotly_chart(fig_demand, use_container_width=True)
     
-    st.markdown("---")
-    
-    # Balance table
-    latest_balance = supply_demand_data.iloc[-1]
-    st.subheader("Current Energy Balance")
-    
-    balance_df = pd.DataFrame({
-        'Source': ['Nuclear', 'Hydro', 'Wind', 'Solar', 'Gas', 'Coal', 'Total Supply', 'Demand', 'Balance'],
-        'Power (MW)': [
-            f"{latest_balance['Nuclear']:.0f}",
-            f"{latest_balance['Hydro']:.0f}",
-            f"{latest_balance['Wind']:.0f}",
-            f"{latest_balance['Solar']:.0f}",
-            f"{latest_balance['Gas']:.0f}",
-            f"{latest_balance['Coal']:.0f}",
-            f"{sum([latest_balance['Nuclear'], latest_balance['Hydro'], latest_balance['Wind'], latest_balance['Solar'], latest_balance['Gas'], latest_balance['Coal']]):.0f}",
-            f"{latest_balance['Demand']:.0f}",
-            f"{sum([latest_balance['Nuclear'], latest_balance['Hydro'], latest_balance['Wind'], latest_balance['Solar'], latest_balance['Gas'], latest_balance['Coal']]) - latest_balance['Demand']:.0f}"
-        ]
-    })
-    st.table(balance_df)
+    st.divider()
+    st.subheader("Demand vs Price Correlation")
+    fig_corr = px.scatter(df, x='demand', y='price', trendline='ols',
+                          title="Price vs Demand Relationship")
+    fig_corr.update_layout(height=400)
+    st.plotly_chart(fig_corr, use_container_width=True)
 
-elif analysis_type == "Renewable Energy":
-    st.header("Renewable Energy Analysis")
-    
-    # Sample renewable data
-    renewable_data = pd.DataFrame({
-        'Source': ['Wind', 'Solar', 'Hydro', 'Biomass'],
-        'Power (MW)': [8920, 5450, 4200, 820],
-        'Percentage': [45.2, 27.6, 21.3, 4.1]
-    })
+# PAGE: Generation Mix
+elif page == "Generation Mix":
+    st.header("Generation Sources Mix")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        fig_pie = px.pie(
-            renewable_data,
-            values='Power (MW)',
-            names='Source',
-            title='Renewable Energy Sources Distribution'
-        )
+        st.subheader("Average Generation Mix (Last 30 Days)")
+        sources = ['wind', 'solar', 'hydro', 'nuclear', 'gas']
+        avg_gen = [df[source].mean() for source in sources]
+        fig_pie = go.Figure(data=[go.Pie(
+            labels=['Wind', 'Solar', 'Hydro', 'Nuclear', 'Gas'],
+            values=avg_gen,
+            marker=dict(colors=['#74B9FF', '#FFD93D', '#6BCB77', '#FF6B6B', '#C0C0C0'])
+        )])
+        fig_pie.update_layout(height=400)
         st.plotly_chart(fig_pie, use_container_width=True)
     
     with col2:
-        fig_bar = px.bar(
-            renewable_data,
-            x='Source',
-            y='Power (MW)',
-            title='Renewable Power Generation by Source',
-            labels={'Power (MW)': 'Power (MW)', 'Source': 'Energy Source'}
+        st.subheader("Generation Source Trends")
+        fig_gen = go.Figure()
+        for source, label in [('wind', 'Wind'), ('solar', 'Solar'), 
+                              ('hydro', 'Hydro'), ('nuclear', 'Nuclear'), ('gas', 'Gas')]:
+            fig_gen.add_trace(go.Scatter(
+                x=df['date'],
+                y=df[source],
+                mode='lines',
+                name=label
+            ))
+        fig_gen.update_layout(
+            title="Generation Sources Over Time",
+            xaxis_title="Date",
+            yaxis_title="Generation (MWh)",
+            hovermode='x unified',
+            height=400
         )
-        st.plotly_chart(fig_bar, use_container_width=True)
-    
-    st.markdown("---")
-    st.subheader("Renewable Energy Targets")
-    
-    targets = pd.DataFrame({
-        'Year': [2023, 2024, 2025, 2026, 2030],
-        'Target (%)': [45, 50, 55, 58, 70]
-    })
-    
-    fig_targets = px.line(
-        targets,
-        x='Year',
-        y='Target (%)',
-        title='Spain Renewable Energy Target Trajectory',
-        markers=True,
-        labels={'Target (%)': 'Renewable Energy (%)', 'Year': 'Year'}
-    )
-    st.plotly_chart(fig_targets, use_container_width=True)
+        st.plotly_chart(fig_gen, use_container_width=True)
 
-elif analysis_type == "Historical Trends":
-    st.header("Historical Trends")
+# PAGE: About
+elif page == "About":
+    st.header("About This Dashboard")
     
-    # Create sample historical data
-    dates = pd.date_range(start=datetime.now() - timedelta(days=365), periods=365, freq='d')
-    historical_data = pd.DataFrame({
-        'Date': dates,
-        'Avg_Price': np.cumsum(np.random.normal(0, 1, 365)) + 85,
-        'Avg_Demand': np.cumsum(np.random.normal(0, 10, 365)) + 28500,
-        'Renewable_Percentage': np.cumsum(np.random.normal(0, 0.1, 365)) + 40
-    })
+    st.markdown("""
+    ### Overview
+    This Streamlit application provides analysis and visualization of the Spanish electricity market.
     
-    col1, col2 = st.columns(2)
+    ### Data Sources
+    - Real-time market data from Spain's electricity operator
+    - Historical price and demand information
+    - Generation mix by source
     
-    with col1:
-        fig_price_trend = px.line(
-            historical_data,
-            x='Date',
-            y='Avg_Price',
-            title='Historical Average Price Trend (1 year)',
-            labels={'Avg_Price': 'Price (€/MWh)', 'Date': 'Date'}
-        )
-        st.plotly_chart(fig_price_trend, use_container_width=True)
+    ### Features
+    - **Overview**: Key metrics and price trends
+    - **Price Analysis**: Detailed price statistics and distribution
+    - **Demand Patterns**: Demand trends and correlation analysis
+    - **Generation Mix**: Energy source composition and trends
     
-    with col2:
-        fig_renewable_trend = px.line(
-            historical_data,
-            x='Date',
-            y='Renewable_Percentage',
-            title='Renewable Energy Penetration Trend (1 year)',
-            labels={'Renewable_Percentage': 'Renewable (%)', 'Date': 'Date'}
-        )
-        st.plotly_chart(fig_renewable_trend, use_container_width=True)
+    ### Technologies Used
+    - **Streamlit**: Web application framework
+    - **Pandas**: Data manipulation and analysis
+    - **Plotly**: Interactive visualizations
+    - **NumPy**: Numerical computations
+    
+    ### Last Updated
+    """)
+    st.info(f"Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    
+    st.markdown("""
+    ### Contact & Support
+    For questions or feedback, please visit the repository.
+    """)
 
 # Footer
-st.markdown("---")
+st.divider()
 st.markdown("""
-    <div style='text-align: center; color: gray; font-size: 0.8rem;'>
-        Last updated: {} UTC | Data source: Spain Electricity Market Analysis
-    </div>
-""".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")), unsafe_allow_html=True)
+<div style='text-align: center; color: gray; font-size: 12px;'>
+    Spain Electricity Market Analysis © 2026
+</div>
+""", unsafe_allow_html=True)
